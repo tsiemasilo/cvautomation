@@ -21,10 +21,17 @@ const upload = multer({
     fileSize: 10 * 1024 * 1024, // 10MB limit
   },
   fileFilter: (req, file, cb) => {
-    const allowedTypes = ['application/pdf', 'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'];
+    console.log('File filter check:', file.mimetype, file.originalname);
+    const allowedTypes = [
+      'application/pdf', 
+      'application/msword', 
+      'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+    ];
     if (allowedTypes.includes(file.mimetype)) {
+      console.log('File type allowed');
       cb(null, true);
     } else {
+      console.log('File type rejected:', file.mimetype);
       cb(new Error('Only PDF, DOC, and DOCX files are allowed'));
     }
   }
@@ -67,19 +74,31 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   // CV upload and parsing
   app.post("/api/cvs/upload", upload.single('cv'), async (req, res) => {
+    console.log('CV upload request received');
+    console.log('File info:', req.file);
+    console.log('Body:', req.body);
+    
     try {
       if (!req.file) {
+        console.log('No file in request');
         return res.status(400).json({ message: "No file uploaded" });
       }
 
       const { userId } = req.body;
       if (!userId) {
+        console.log('No userId in request body');
         return res.status(400).json({ message: "User ID is required" });
       }
 
-      // Parse CV content
-      const parsedData = await cvParserService.parseCV(req.file.path, req.file.mimetype);
+      console.log(`Processing CV upload for user: ${userId}`);
+      console.log(`File: ${req.file.originalname}, Type: ${req.file.mimetype}, Size: ${req.file.size}`);
 
+      // Parse CV content
+      console.log('Starting CV parsing...');
+      const parsedData = await cvParserService.parseCV(req.file.path, req.file.mimetype);
+      console.log('CV parsing completed:', parsedData);
+
+      console.log('Creating CV record in database...');
       const cv = await storage.createCv({
         userId,
         filename: req.file.filename,
@@ -88,9 +107,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
         mimeType: req.file.mimetype,
         parsedData,
       });
+      console.log('CV record created:', cv.id);
 
       res.json({ cv, parsedData });
     } catch (error) {
+      console.error('CV upload error:', error);
+      console.error('Error stack:', error instanceof Error ? error.stack : 'No stack trace');
       res.status(500).json({ message: "CV upload failed", error: error instanceof Error ? error.message : "Unknown error" });
     }
   });
